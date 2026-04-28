@@ -1,10 +1,14 @@
 import streamlit as st
 import pandas as pd
+import os
 
-# Load data
-deals = pd.read_excel("Deal_funnel_Data.xlsx")
-work_orders = pd.read_excel("Work_Order_Tracker_Data.xlsx")
+# -------- LOAD DATA (FIXED PATH) --------
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
+deals = pd.read_excel(os.path.join(BASE_DIR, "Deal_funnel_Data.xlsx"))
+work_orders = pd.read_excel(os.path.join(BASE_DIR, "Work_Order_Tracker_Data.xlsx"))
+
+# -------- UI --------
 st.set_page_config(page_title="Monday.com BI AI Agent", page_icon=":bar_chart:", layout="centered")
 
 st.title("Monday.com BI AI Agent")
@@ -13,7 +17,7 @@ st.caption("Ask questions about deals, revenue, sectors, and work orders.")
 st.info("Running in local data mode using uploaded Excel files.")
 st.caption("Sample queries: How is pipeline for energy sector? | Revenue summary | Leadership update")
 
-# Chat memory
+# -------- CHAT MEMORY --------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -21,7 +25,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# -------- PROCESS FUNCTION --------
+# -------- QUERY PROCESSING --------
 def process_query(query):
     query = query.lower()
 
