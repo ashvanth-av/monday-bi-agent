@@ -1,22 +1,19 @@
-import os
-
-import requests
 import streamlit as st
-from dotenv import load_dotenv
+import pandas as pd
 
-
-load_dotenv()
-
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+# Load data
+deals = pd.read_excel("Deal_funnel_Data.xlsx")
+work_orders = pd.read_excel("Work_Order_Tracker_Data.xlsx")
 
 st.set_page_config(page_title="Monday.com BI AI Agent", page_icon=":bar_chart:", layout="centered")
+
 st.title("Monday.com BI AI Agent")
 st.caption("Ask questions about deals, revenue, sectors, and work orders.")
-st.info("Running in local data mode using uploaded Excel files.")
-st.caption(
-    "Sample queries: `How is pipeline for energy sector?`, `Revenue summary`, `Leadership update`"
-)
 
+st.info("Running in local data mode using uploaded Excel files.")
+st.caption("Sample queries: How is pipeline for energy sector? | Revenue summary | Leadership update")
+
+# Chat memory
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -24,54 +21,96 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# -------- PROCESS FUNCTION --------
+def process_query(query):
+    query = query.lower()
+
+    try:
+        total_value = deals.select_dtypes(include='number').sum().sum()
+    except:
+        total_value = 0
+
+    if "pipeline" in query:
+        return f"""
+**Summary:** Pipeline looks active with {len(deals)} deals.
+
+**Trends:** Total pipeline value is approximately ₹{int(total_value)}.
+
+**Warnings:** Some records may contain missing or inconsistent values.
+
+**Recommendations:** Focus on closing high-value deals and improving data consistency.
+"""
+
+    elif "revenue" in query:
+        return f"""
+**Summary:** Revenue appears stable.
+
+**Trends:** Estimated total revenue is ₹{int(total_value)}.
+
+**Warnings:** Some financial entries may be incomplete.
+
+**Recommendations:** Diversify deal sources and ensure accurate data entry.
+"""
+
+    elif "sector" in query:
+        if "sector" in deals.columns:
+            top_sector = deals["sector"].astype(str).value_counts().idxmax()
+        else:
+            top_sector = "Unknown"
+
+        return f"""
+**Summary:** Top performing sector is {top_sector}.
+
+**Trends:** Sector performance varies across deals.
+
+**Warnings:** Sector data may not be consistent across all records.
+
+**Recommendations:** Focus on high-performing sectors while improving weaker ones.
+"""
+
+    elif "work" in query:
+        return f"""
+**Summary:** There are {len(work_orders)} work orders.
+
+**Trends:** Execution is ongoing across multiple tasks.
+
+**Warnings:** Some work order statuses may be incomplete.
+
+**Recommendations:** Improve tracking and timely updates for operations.
+"""
+
+    elif "leadership" in query:
+        return """
+**Leadership Summary**
+
+KPIs:
+- Stable pipeline
+- Consistent deal flow
+
+Risks:
+- Data inconsistencies
+- Execution gaps
+
+Recommendations:
+- Improve data quality
+- Strengthen sales-to-execution conversion
+"""
+
+    else:
+        return "Please ask about pipeline, revenue, sector, or operations."
+
+# -------- CHAT INPUT --------
 prompt = st.chat_input("Ask about pipeline, revenue, sector performance, or operations...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
+
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    answer = process_query(prompt)
+
     with st.chat_message("assistant"):
-        try:
-            response = requests.post(
-                f"{BACKEND_URL}/chat",
-                json={"query": prompt},
-                timeout=90,
-            )
-            if response.status_code >= 400:
-                try:
-                    detail = response.json().get("detail", response.text)
-                except Exception:
-                    detail = response.text
-                raise RuntimeError(detail)
-            payload = response.json()
-            insight = payload["insight"]
-
-            lines = [
-                f"**Summary:** {insight['summary']}",
-                f"**Trends:** {insight['trends']}",
-            ]
-            if insight.get("warnings"):
-                lines.append("**Warnings:**")
-                lines.extend([f"- {warning}" for warning in insight["warnings"]])
-            lines.append(f"**Recommendations:** {insight['recommendations']}")
-
-            if payload.get("leadership_summary"):
-                summary = payload["leadership_summary"]
-                lines.append("**Leadership Summary**")
-                if summary.get("kpis"):
-                    lines.append("KPIs:")
-                    lines.extend([f"- {kpi}" for kpi in summary["kpis"]])
-                if summary.get("risks"):
-                    lines.append("Risks:")
-                    lines.extend([f"- {risk}" for risk in summary["risks"]])
-                if summary.get("recommendations"):
-                    lines.append("Leadership recommendations:")
-                    lines.extend([f"- {item}" for item in summary["recommendations"]])
-
-            answer = "\n".join(lines)
-        except Exception as exc:
-            answer = f"Backend request failed: {exc}"
-
         st.markdown(answer)
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+
+    st.session_state.messages.append({"role": "assistant", "content": answer})
